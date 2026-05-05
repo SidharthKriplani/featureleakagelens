@@ -128,3 +128,13 @@ Built **FeatureLeakageLens**, a pre-training feature leakage auditor for tabular
 ## License
 
 MIT
+
+---
+
+## How This Connects
+
+FeatureLeakageLens is the **pre-training data quality gate** for ML platforms in this portfolio:
+
+- **RiskFrame:** Before training the XGBoost champion on Home Credit data, FeatureLeakageLens audits the feature set for target leakage (features that encode default status directly, like post-default payment flags), temporal leakage (features computed after the loan decision date), and near-duplicate features. The `credit_income_ratio` engineered feature passes all checks; it is a pre-decision ratio, not a post-outcome signal.
+- **DevPulse:** The training data for DevPulse's version classification model is audited by FeatureLeakageLens to ensure version labels don't appear in the feature text (label contamination in the NLP context).
+- **Any tabular ML pipeline:** The library is general-purpose. Any project that trains a supervised model on tabular data should run FeatureLeakageLens before fitting to avoid shipping a model with an inflated AUC that collapses in production.
