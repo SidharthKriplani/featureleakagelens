@@ -11,68 +11,71 @@
 
 <p>
   <img alt="Checks" src="https://img.shields.io/badge/checks-6-0ea5e9?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-14-22c55e?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-13-22c55e?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/PRD-PASS-22c55e?style=flat-square">
 </p>
 
-FeatureLeakageLens audits tabular ML datasets for suspicious feature leakage patterns **before model training**. It is intentionally an auditor, not a proof engine — it returns structured `PASS / WARN / FAIL / INSUFFICIENT_INPUT` findings and asks the data scientist to review suspicious features rather than claiming it can automatically prove leakage.
+FeatureLeakageLens audits tabular ML datasets for suspicious feature leakage patterns **before model training**. It accepts a DataFrame, runs six checks, and returns a structured PASS / WARN / FAIL report the data scientist reviews before fitting a single model.
 
 ## About
 
-Feature leakage is one of the most common failure modes in ML model development. Models that look excellent offline often fail in production because their training data includes information that would not have been available at prediction time: post-outcome columns included by accident, target proxies created during feature engineering, timestamps from after the outcome event, or high-cardinality identifiers that memorize training labels.
+The worst feature leakage is invisible. A model trained on a post-outcome column doesn't look miscalibrated — it looks exceptional. AUC near 1.0, precision through the roof, validation loss flatlining early. Nothing in the training curves signals the problem. The failure only surfaces when the model hits production and the feature isn't available yet, because it was generated after the event you were trying to predict.
 
-These problems are well-known but rarely caught systematically. They are typically discovered late — during production monitoring, in code review, or after a failed deployment.
+By then, the model has shipped, the business has made decisions on it, and months of development are sunk.
 
-FeatureLeakageLens makes the leakage review step systematic and reportable. It runs a structured set of checks against the training DataFrame, produces a per-feature audit report, and surfaces findings for human review before a model is trained. The truth boundary is explicit in every report: the tool flags suspicious patterns; the data scientist and domain expert confirm whether a feature was actually available at prediction time.
+Feature leakage is caught late not because teams are careless, but because the dataset review step is informal. There's no standard checklist, no structured output to attach to a model card, and no CI gate to fail. A data scientist checks the columns they think of checking, in the order they happen to think of them, before moving on to the work that feels more like real ML.
+
+FeatureLeakageLens makes that review step explicit, systematic, and documentable. It checks column names for post-outcome terms, scans for suspiciously correlated features, looks for categorical target-rate proxies, verifies timestamps, flags high-cardinality IDs, and tests for train/test distribution shift — before any model is trained. The output is a per-feature audit report in JSON, Markdown, and HTML, with a clear status and evidence you can attach to a pull request or model card review.
+
+The truth boundary is stated on every report: this tool flags suspicious patterns. The domain expert confirms whether a feature was actually available at prediction time.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    IN["LeakageAuditConfig + DataFrame\ntarget_col · split_col · outcome_time_col\nfeature_time_cols · thresholds"]
+    IN["LeakageAuditConfig + DataFrame\n──────────────────────────\ntarget_col · split_col\noutcome_time_col · feature_time_cols\nthresholds"]
 
-    IN --> NH
-    IN --> TC
-    IN --> CP
-    IN --> TA
-    IN --> ID
-    IN --> SD
+    subgraph CHEAP ["Tier 1 — Name & Structure  (zero-compute)"]
+        NH["Post-outcome Name Heuristic\nkeyword scan · col names only\n→ WARN"]
+        ID["ID / Proxy Scan\nn_unique / n_rows ≥ id_threshold\n→ WARN"]
+    end
 
-    NH["Post-outcome Name Heuristic\nscans column names for\npost-outcome / target-proxy terms"]
-    TC["Target Correlation Scan\nnumeric features vs target\n|corr| >= threshold"]
-    CP["Categorical Proxy Scan\ntarget-rate gap per\ncategorical feature value"]
-    TA["Temporal Availability\nfeature timestamp vs\noutcome timestamp per row"]
-    ID["ID / Proxy Scan\nhigh-cardinality ID-like\ncolumns"]
-    SD["Split Distribution Scan\ntrain vs test numeric shift\nand categorical TVD"]
+    subgraph STAT ["Tier 2 — Statistical Checks  (requires data)"]
+        TC["Target Correlation\nPearson |r| ≥ high_corr_threshold\n→ WARN"]
+        CP["Categorical Proxy\nmax_rate − min_rate ≥ cat_proxy_threshold\n→ WARN"]
+        SD["Split Distribution\nnorm. mean diff (numeric) · TVD (categorical)\n→ WARN · INSUFFICIENT_INPUT if no split_col"]
+    end
 
-    NH --> AGG
-    TC --> AGG
-    CP --> AGG
-    TA --> AGG
-    ID --> AGG
-    SD --> AGG
+    subgraph TEMPORAL ["Tier 3 — Temporal Integrity  (structural violation)"]
+        TA["Temporal Availability\nfeature_ts > outcome_ts per row\n→ FAIL  (not WARN)"]
+    end
 
-    AGG["Overall Status\nFAIL > WARN > INSUFFICIENT_INPUT > PASS"]
-    AGG --> OUT
+    IN --> CHEAP
+    IN --> STAT
+    IN --> TEMPORAL
 
-    OUT["LeakageReport\nJSON · Markdown · HTML\nexplicit truth boundary"]
+    CHEAP & STAT & TEMPORAL --> AGG
+
+    AGG["FAIL › WARN › INSUFFICIENT_INPUT › PASS"]
+    AGG --> OUT["LeakageReport\nJSON · Markdown · HTML\nexplicit truth boundary"]
 ```
 
-## Why this exists
+## The 6 checks
 
-Many ML models look excellent offline because the training data includes information unavailable at prediction time. Common failure modes:
+| Tier | Check | Method | Status |
+|---|---|---|---|
+| Name & Structure | Post-outcome name heuristic | Keyword scan on column names | WARN |
+| Name & Structure | ID / proxy scan | n_unique / n_rows ≥ threshold | WARN |
+| Statistical | Target correlation scan | Pearson \|r\| ≥ threshold | WARN |
+| Statistical | Categorical proxy scan | Target-rate gap across values | WARN |
+| Statistical | Split distribution scan | Normalised mean diff + TVD | WARN or INSUFFICIENT_INPUT |
+| Temporal | Temporal availability | feature_ts > outcome_ts per row | **FAIL** |
 
-- **Post-outcome columns** — a `payment_received_flag` set after the loan outcome is decided
-- **Target proxies** — a `default_probability_v1` column computed from the same outcome
-- **Future timestamps** — a feature generated after the label date
-- **ID leakage** — high-cardinality identifiers that memorize training labels
-- **Train/test contamination** — systematic distribution differences suggesting a leaky split
-
-FeatureLeakageLens makes that review systematic and reportable before a model is trained.
+Only temporal availability can produce FAIL — it is the one check with no ambiguity. Every other finding requires domain confirmation.
 
 ## Truth boundary
 
-FeatureLeakageLens does **not** prove leakage. It flags suspicious features for review. Human judgment is required to decide whether a feature was available at prediction time and whether it is valid for the business workflow. It is not a replacement for model review, feature-store governance, data contracts, or production monitoring.
+FeatureLeakageLens does **not** prove leakage. It flags suspicious patterns for review. Human judgment is required to confirm whether a feature was actually available at prediction time. It is not a replacement for feature-store governance, data contracts, or production monitoring.
 
 ## Install
 
@@ -98,8 +101,8 @@ config = LeakageAuditConfig(
 
 report = audit_dataframe(df, config)
 
-print(report.status)           # FAIL / WARN / PASS
-report.save("outputs/")        # writes JSON, Markdown, HTML
+print(report.status)       # FAIL / WARN / PASS
+report.save("outputs/")    # writes JSON, Markdown, HTML
 ```
 
 ## Run the demo
@@ -112,26 +115,15 @@ python scripts/generate_demo_reports.py
 open outputs/featureleakagelens_report.html
 ```
 
-## Run tests
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## The 6 checks
-
-| Check | What it detects |
-|---|---|
-| Post-outcome name heuristic | Column names containing post-outcome / target-proxy terms |
-| Target correlation scan | Numeric features with very high absolute correlation to target |
-| Categorical proxy scan | Categorical features with large target-rate gap across values |
-| Temporal availability | Feature timestamp after outcome timestamp (future leakage) |
-| ID / proxy scan | High-cardinality identifier columns |
-| Split distribution scan | Material train/test distribution shift suggesting a leaky split |
-
 ## Resume-safe claim
 
 Built **FeatureLeakageLens**, a pre-training feature leakage auditor for tabular ML datasets that checks for post-outcome name heuristics, target correlation, categorical target-rate proxies, future timestamp leakage, ID/proxy columns, and train/test distribution shift, producing structured JSON/Markdown/HTML audit reports with per-finding PASS/WARN/FAIL/INSUFFICIENT_INPUT status and explicit truth boundary.
+
+## Roadmap
+
+- Mutual information scan for nonlinear proxy detection
+- Group leakage check for cross-validation folds (same entity in train and test)
+- Time-series walk-forward split validator
 
 ## License
 
