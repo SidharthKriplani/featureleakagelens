@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] — 2026-05-06
+
+### Added
+- `training_future_date_scan`: auto-detects datetime columns in the training set,
+  infers the training cutoff from `outcome_time_col`, and flags any feature column
+  whose values exceed the cutoff — catching temporal boundary leakage without
+  requiring explicit `feature_time_cols` configuration.
+- `weighted_leakage_risk_score(findings)`: aggregate severity-weighted risk score
+  surfaced in every `LeakageReport.summary` dict. Weights: FAIL/high=4.5,
+  FAIL/medium=3.0, WARN/medium=1.0, WARN/low=0.3.
+- `WeightedRiskScoreTests` (3 tests) and `TrainingFutureDateScanTests` (3 tests).
+
+### Changed
+- Version bumped to 0.4.0.
+
 ## [0.3.0] — 2026-05-06
 
 ### Added
