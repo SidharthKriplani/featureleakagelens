@@ -195,5 +195,85 @@ class TargetRateTests(unittest.TestCase):
         self.assertEqual(len(split_fails), 0)
 
 
+class WeightedRiskScoreTests(unittest.TestCase):
+    """Tests for weighted_leakage_risk_score."""
+
+    def test_score_increases_with_severity(self):
+        from featureleakagelens import LeakageFinding, weighted_leakage_risk_score
+        findings_high = [LeakageFinding("x", "FAIL", "high", "f", "d", "r")]
+        findings_low  = [LeakageFinding("x", "WARN", "low",  "f", "d", "r")]
+        self.assertGreater(
+            weighted_leakage_risk_score(findings_high),
+            weighted_leakage_risk_score(findings_low),
+        )
+
+    def test_zero_score_for_pass_findings(self):
+        from featureleakagelens import LeakageFinding, weighted_leakage_risk_score
+        findings = [LeakageFinding("x", "PASS", "none", None, "d", "r")]
+        self.assertEqual(weighted_leakage_risk_score(findings), 0.0)
+
+    def test_score_in_summary_dict(self):
+        df = pd.DataFrame({"x": [1, 2, 3], "target": [0, 1, 0]})
+        report = audit_dataframe(df, LeakageAuditConfig(target_col="target"))
+        self.assertIn("weighted_risk_score", report.summary)
+        self.assertIsInstance(report.summary["weighted_risk_score"], float)
+
+
+class TrainingFutureDateScanTests(unittest.TestCase):
+    """Tests for the auto-detected temporal boundary scan."""
+
+    def _make_boundary_df(self, future: bool):
+        import numpy as np
+        # outcome_ts is the "training cutoff" — 2025-01-15
+        # feature_ts: if future=True, training rows have feature dates AFTER the cutoff
+        n_train, n_test = 20, 20
+        cutoff = pd.Timestamp("2025-01-15")
+        feature_dates_train = (
+            pd.date_range("2025-01-20", periods=n_train, freq="D")  # after cutoff
+            if future
+            else pd.date_range("2025-01-01", periods=n_train, freq="D")  # before
+        )
+        return pd.DataFrame({
+            "feature_date": list(feature_dates_train) + pd.date_range("2025-02-01", periods=n_test, freq="D").tolist(),
+            "x": list(range(n_train + n_test)),
+            "outcome_ts": [cutoff] * n_train + [pd.Timestamp("2025-02-28")] * n_test,
+            "split": ["train"] * n_train + ["test"] * n_test,
+            "target": [0, 1] * 20,
+        })
+
+    def test_future_feature_dates_in_training_fails(self):
+        df = self._make_boundary_df(future=True)
+        report = audit_dataframe(df, LeakageAuditConfig(
+            target_col="target",
+            split_col="split",
+            outcome_time_col="outcome_ts",
+        ))
+        scan_findings = [f for f in report.findings if f.check_name == "training_future_date_scan"]
+        fail_findings = [f for f in scan_findings if f.status == "FAIL"]
+        self.assertGreater(len(fail_findings), 0)
+        self.assertIn("future_rows", fail_findings[0].evidence)
+
+    def test_clean_feature_dates_do_not_fail(self):
+        df = self._make_boundary_df(future=False)
+        report = audit_dataframe(df, LeakageAuditConfig(
+            target_col="target",
+            split_col="split",
+            outcome_time_col="outcome_ts",
+        ))
+        fail_findings = [
+            f for f in report.findings
+            if f.check_name == "training_future_date_scan" and f.status == "FAIL"
+        ]
+        self.assertEqual(len(fail_findings), 0)
+
+    def test_missing_config_gives_insufficient_input(self):
+        df = pd.DataFrame({"x": [1, 2], "target": [0, 1]})
+        report = audit_dataframe(df, LeakageAuditConfig(target_col="target"))
+        self.assertTrue(any(
+            f.check_name == "training_future_date_scan" and f.status == "INSUFFICIENT_INPUT"
+            for f in report.findings
+        ))
+
+
 if __name__ == "__main__":
     unittest.main()

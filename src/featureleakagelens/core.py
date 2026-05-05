@@ -199,6 +199,45 @@ def _categorical_tvd(train: pd.Series, test: pd.Series) -> Optional[float]:
     return float(0.5 * np.abs(p - q).sum())
 
 
+def weighted_leakage_risk_score(findings: List[LeakageFinding]) -> float:
+    """Compute a weighted severity risk score across all findings.
+
+    FAIL/high=4.5, FAIL/medium=3.0, FAIL/low=1.5,
+    WARN/high=1.5, WARN/medium=1.0, WARN/low=0.3
+    Returns a non-negative float; higher = riskier.
+    """
+    weights = {
+        ("FAIL", "high"): 4.5,
+        ("FAIL", "medium"): 3.0,
+        ("FAIL", "low"): 1.5,
+        ("WARN", "high"): 1.5,
+        ("WARN", "medium"): 1.0,
+        ("WARN", "low"): 0.3,
+    }
+    return round(sum(weights.get((f.status, f.severity), 0.0) for f in findings), 2)
+
+
+def _auto_detect_datetime_cols(df: pd.DataFrame, ignore: set) -> List[str]:
+    """Return column names that appear to be datetime-valued (dtype or parseable strings)."""
+    detected = []
+    for col in df.columns:
+        if col in ignore:
+            continue
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            detected.append(col)
+        elif df[col].dtype == object:
+            sample = df[col].dropna().head(30)
+            if len(sample) < 3:
+                continue
+            try:
+                parsed = pd.to_datetime(sample, errors="coerce", infer_datetime_format=True)
+                if parsed.notna().sum() >= len(sample) * 0.8:
+                    detected.append(col)
+            except Exception:
+                pass
+    return detected
+
+
 def audit_dataframe(df: pd.DataFrame, config: LeakageAuditConfig) -> LeakageReport:
     findings: List[LeakageFinding] = []
     if config.target_col not in df.columns:
@@ -304,6 +343,41 @@ def audit_dataframe(df: pd.DataFrame, config: LeakageAuditConfig) -> LeakageRepo
                 {"unique_ratio": round(unique_ratio, 4)},
             ))
 
+    # Training future date scan (auto-detected datetime columns vs. training boundary)
+    if (config.split_col and config.outcome_time_col
+            and config.split_col in df.columns
+            and config.outcome_time_col in df.columns):
+        train_subset = df[df[config.split_col].astype(str) == str(config.train_value)]
+        outcome_ts = pd.to_datetime(train_subset[config.outcome_time_col], errors="coerce")
+        training_cutoff = outcome_ts.max()
+        if pd.notna(training_cutoff):
+            date_cols = _auto_detect_datetime_cols(
+                train_subset, ignored | {config.outcome_time_col}
+            )
+            for col in date_cols:
+                feature_ts = pd.to_datetime(train_subset[col], errors="coerce")
+                valid = feature_ts.notna()
+                future_count = int((feature_ts[valid] > training_cutoff).sum())
+                if future_count > 0:
+                    findings.append(LeakageFinding(
+                        "training_future_date_scan", "FAIL", "high", col,
+                        f"Feature '{col}' has {future_count} training row(s) with dates after "
+                        f"the inferred training cutoff ({training_cutoff.date()}).",
+                        "Do not use features derived from data beyond the training boundary. "
+                        "Verify this date column is not computed from post-outcome events.",
+                        {
+                            "future_rows": future_count,
+                            "training_cutoff": str(training_cutoff.date()),
+                            "checked_rows": int(valid.sum()),
+                        },
+                    ))
+    else:
+        findings.append(LeakageFinding(
+            "training_future_date_scan", "INSUFFICIENT_INPUT", "low", None,
+            "Temporal boundary scan requires both split_col and outcome_time_col.",
+            "Provide split_col and outcome_time_col to enable auto-detected date-boundary scanning.",
+        ))
+
     # Split distribution warnings
     if config.split_col:
         if config.split_col not in df.columns:
@@ -357,6 +431,7 @@ def audit_dataframe(df: pd.DataFrame, config: LeakageAuditConfig) -> LeakageRepo
         "warn_count": int(sum(f.status == "WARN" for f in findings)),
         "fail_count": int(sum(f.status == "FAIL" for f in findings)),
         "insufficient_input_count": int(sum(f.status == "INSUFFICIENT_INPUT" for f in findings)),
+        "weighted_risk_score": weighted_leakage_risk_score(findings),
     }
     if not findings:
         findings.append(LeakageFinding(
