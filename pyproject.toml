@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "featureleakagelens"
+version = "0.2.0"
+description = "Pre-training leakage audit reports for tabular ML datasets."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "Sidharth Kriplani"}]
+dependencies = ["pandas>=1.5", "numpy>=1.23"]
+keywords = ["machine-learning", "data-quality", "leakage", "model-validation", "mlops"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
