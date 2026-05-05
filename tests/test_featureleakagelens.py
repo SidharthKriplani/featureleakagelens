@@ -134,5 +134,66 @@ class EvidenceTests(unittest.TestCase):
             self.assertIn("test_report.html", files)
 
 
+class HighCardinalityTests(unittest.TestCase):
+    """Tests for the high-cardinality ID-proxy scan."""
+
+    def test_high_cardinality_feature_warns(self):
+        import numpy as np
+        # Feature with near-unique values relative to row count → likely an ID proxy
+        df = pd.DataFrame({
+            "transaction_id": list(range(100)),       # 100% unique
+            "target": np.random.default_rng(7).integers(0, 2, 100).astype(float),
+        })
+        report = audit_dataframe(df, LeakageAuditConfig(
+            target_col="target",
+            high_cardinality_ratio_threshold=0.90,
+        ))
+        self.assertTrue(any(f.check_name == "id_proxy_scan" for f in report.findings))
+
+    def test_normal_cardinality_does_not_trigger_id_proxy(self):
+        df = pd.DataFrame({
+            "region": ["north", "south", "east", "west"] * 25,
+            "target": [0, 1] * 50,
+        })
+        report = audit_dataframe(df, LeakageAuditConfig(target_col="target"))
+        id_proxy_findings = [f for f in report.findings if f.check_name == "id_proxy_scan" and f.status in ("WARN", "FAIL")]
+        # region has low cardinality — should not trigger
+        region_id_proxy = [f for f in id_proxy_findings if f.feature == "region"]
+        self.assertEqual(len(region_id_proxy), 0)
+
+
+class TargetRateTests(unittest.TestCase):
+    """Tests that target rate gap between train and test is flagged."""
+
+    def test_extreme_target_rate_gap_warns(self):
+        # train: 90% positive, test: 10% positive — extreme label shift
+        df = pd.DataFrame({
+            "x": list(range(100)),
+            "target": [1] * 45 + [0] * 5 + [0] * 45 + [1] * 5,
+            "split":  ["train"] * 50 + ["test"] * 50,
+        })
+        report = audit_dataframe(df, LeakageAuditConfig(
+            target_col="target",
+            split_col="split",
+            categorical_target_rate_gap_threshold=0.30,
+        ))
+        # Should flag split_distribution_scan or target correlation issues
+        self.assertIn(report.status, ["WARN", "FAIL"])
+
+    def test_balanced_target_rate_does_not_flag(self):
+        df = pd.DataFrame({
+            "x": list(range(200)),
+            "target": [0, 1] * 100,
+            "split": ["train"] * 100 + ["test"] * 100,
+        })
+        report = audit_dataframe(df, LeakageAuditConfig(
+            target_col="target",
+            split_col="split",
+        ))
+        # Balanced split → no major flags expected beyond INFO-level
+        split_fails = [f for f in report.findings if f.check_name == "split_distribution_scan" and f.status == "FAIL"]
+        self.assertEqual(len(split_fails), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

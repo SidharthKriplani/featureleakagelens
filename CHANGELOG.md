@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] — 2026-05-06
+
+### Added
+- `HighCardinalityTests` (2 tests): verifies `id_proxy_scan` fires on near-unique
+  numeric features and does not fire on low-cardinality categoricals.
+- `TargetRateTests` (2 tests): verifies extreme train/test label shift is flagged
+  and that a balanced split does not produce false positives.
+- `docs/prd/` directory with Interview Defense and PRD documents.
+
+### Changed
+- Version bumped to 0.3.0.
+
 ## [0.2.0] — 2025-05-05
 
 ### Added
