@@ -10,12 +10,12 @@
 </p>
 
 <p>
-  <img alt="Checks" src="https://img.shields.io/badge/checks-6-0ea5e9?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-13-22c55e?style=flat-square">
+  <img alt="Checks" src="https://img.shields.io/badge/checks-7-0ea5e9?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-23-22c55e?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/PRD-PASS-22c55e?style=flat-square">
 </p>
 
-FeatureLeakageLens audits tabular ML datasets for suspicious feature leakage patterns **before model training**. It accepts a DataFrame, runs six checks, and returns a structured PASS / WARN / FAIL report the data scientist reviews before fitting a single model.
+FeatureLeakageLens audits tabular ML datasets for suspicious feature leakage patterns **before model training**. It accepts a DataFrame, runs seven checks, and returns a structured PASS / WARN / FAIL report the data scientist reviews before fitting a single model.
 
 ## Architecture
 
@@ -60,6 +60,7 @@ flowchart TD
 
     subgraph TEMPORAL ["Tier 3 — Temporal Integrity  (structural violation)"]
         TA["Temporal Availability\nfeature_ts > outcome_ts per row\n→ FAIL  (not WARN)"]
+        TF["Training Future Date Scan\nauto-detected datetime cols vs. max(outcome_ts)\n→ FAIL  (not WARN)"]
     end
 
     IN --> CHEAP
@@ -72,7 +73,7 @@ flowchart TD
     AGG --> OUT["LeakageReport\nJSON · Markdown · HTML\nexplicit truth boundary"]
 ```
 
-## The 6 checks
+## The 7 checks
 
 | Tier | Check | Method | Status |
 |---|---|---|---|
@@ -82,8 +83,9 @@ flowchart TD
 | Statistical | Categorical proxy scan | Target-rate gap across values | WARN |
 | Statistical | Split distribution scan | Normalised mean diff + TVD | WARN or INSUFFICIENT_INPUT |
 | Temporal | Temporal availability | feature_ts > outcome_ts per row | **FAIL** |
+| Temporal | Training future date scan | Auto-detected datetime cols vs. inferred training cutoff | **FAIL** |
 
-Only temporal availability can produce FAIL — it is the one check with no ambiguity. Every other finding requires domain confirmation.
+Two checks can produce FAIL — both are temporal integrity violations with no ambiguity. The training future date scan auto-detects datetime-typed columns in the training split and flags any that contain values beyond the inferred training cutoff (`max(outcome_ts)` for the training rows). Every other finding requires domain confirmation.
 
 ## Truth boundary
 
@@ -159,12 +161,27 @@ FeatureLeakageLens is the **pre-training data quality gate** for ML platforms in
 
 ## Part of Applied LLM Systems Portfolio
 
-This project is part of a portfolio targeting Applied LLM Systems Engineer roles.
+This project is part of a 13-repo portfolio targeting Applied LLM Systems Engineer, MLOps, and Technical AI PM roles.
 
-- [**NexusSupply**](https://github.com/SidharthKriplani/nexussupply) — Supplier Risk Intelligence Platform (LangGraph + FinBERT + XGBoost + Instructor + NetworkX)
-- [**LendFlow**](https://github.com/SidharthKriplani/lendflow) — AI-powered loan underwriting pipeline (LangGraph + RAG + FOIR rules engine)
-- [**AgentReliabilityLab**](https://github.com/SidharthKriplani/agentreliabilitylab) — Cyber threat triage agent (LangGraph + hybrid RAG + HITL + RAGAS eval)
-- [**RiskFrame Platform**](https://github.com/SidharthKriplani/riskframe_platform) — ML model lifecycle (XGBoost + LightGBM champion/challenger, Optuna HPO, drift monitoring)
-- [**DevPulse Platform**](https://github.com/SidharthKriplani/devpulse_platform) — Version-safe RAG migration intelligence (LLM-Last principle, conflict detection)
-- [**PulseRank Platform**](https://github.com/SidharthKriplani/pulserank_platform) — Marketplace ranking with IPS debiasing (position bias correction, delayed attribution)
-- [**MetaSignal Platform**](https://github.com/SidharthKriplani/metasignal_platform) — Experimentation intelligence (CUPED + guardrail-first + A/A calibration)
+**Applied Systems (LangGraph pipelines):**
+
+| Project | Domain | Primary Failure Mode |
+|---------|--------|----------------------|
+| [LendFlow](https://github.com/SidharthKriplani/lendflow) | Financial underwriting | When to stop or escalate |
+| [AgentReliabilityLab](https://github.com/SidharthKriplani/agentreliabilitylab) | Cyber threat triage | When to stop or escalate |
+| [NexusSupply](https://github.com/SidharthKriplani/nexussupply) | Supplier risk intelligence | Conflicting signal fusion |
+
+**Platforms & Auditors (domain-agnostic tooling):**
+
+| Project | What It Audits / Builds |
+|---------|------------------------|
+| [InferenceLens](https://github.com/SidharthKriplani/inferencelens) | Inference cost/quality tradeoffs — Pareto frontier, routing rules |
+| [RiskFrame](https://github.com/SidharthKriplani/riskframe_platform) | ML model lifecycle — champion/challenger, drift, fairness |
+| [MetaSignal](https://github.com/SidharthKriplani/metasignal_platform) | A/B experiment validity — CUPED, guardrail-first, SRM |
+| [DevPulse](https://github.com/SidharthKriplani/devpulse_platform) | Version-safe RAG — conflict detection, LLM-Last architecture |
+| [PulseRank](https://github.com/SidharthKriplani/pulserank_platform) | Marketplace ranking — IPS debiasing, MMR diversity |
+| [TrialCheck](https://github.com/SidharthKriplani/trialcheck_v0) | A/B readout audit — SRM, peeking, underpowered tests |
+| **FeatureLeakageLens** | Pre-training leakage — target, temporal, overlap |
+| [GoldenSetAuditor](https://github.com/SidharthKriplani/goldensetauditor_v0) | LLM/RAG eval dataset quality |
+| [DocIngestQA](https://github.com/SidharthKriplani/docingestqa) | RAG document ingestion quality — 11 deterministic checks |
+| [MetricLens](https://github.com/SidharthKriplani/metriclens) | Metric movement decomposition — mix shift vs rate shift |

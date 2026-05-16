@@ -231,7 +231,7 @@ class TrainingFutureDateScanTests(unittest.TestCase):
         feature_dates_train = (
             pd.date_range("2025-01-20", periods=n_train, freq="D")  # after cutoff
             if future
-            else pd.date_range("2025-01-01", periods=n_train, freq="D")  # before
+            else pd.date_range("2024-12-01", periods=n_train, freq="D")  # all before cutoff 2025-01-15
         )
         return pd.DataFrame({
             "feature_date": list(feature_dates_train) + pd.date_range("2025-02-01", periods=n_test, freq="D").tolist(),
