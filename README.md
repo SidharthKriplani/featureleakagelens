@@ -1,6 +1,6 @@
 # FeatureLeakageLens
 
-**Pre-training feature leakage auditor for tabular ML datasets.**
+> Pre-training feature leakage auditor for tabular ML datasets. Catches target leakage, temporal leakage, train/test overlap, and id leakage before a single model is fit.
 
 <p>
   <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/SidharthKriplani/featureleakagelens/ci.yml?branch=main&label=CI&style=for-the-badge&logo=githubactions&logoColor=white">
@@ -41,7 +41,7 @@ FeatureLeakageLens makes that review step explicit, systematic, and documentable
 
 The truth boundary is stated on every report: this tool flags suspicious patterns. The domain expert confirms whether a feature was actually available at prediction time.
 
-## Architecture
+## How It Works
 
 ```mermaid
 flowchart TD
