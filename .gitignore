@@ -14,3 +14,9 @@ outputs/*.md
 outputs/*.html
 outputs/*.tmp
 github_push.sh
+*.zip
+dist/
+*.egg-info/
+.DS_Store
+__pycache__/
+*.pyc
