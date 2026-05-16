@@ -17,6 +17,18 @@
 
 FeatureLeakageLens audits tabular ML datasets for suspicious feature leakage patterns **before model training**. It accepts a DataFrame, runs six checks, and returns a structured PASS / WARN / FAIL report the data scientist reviews before fitting a single model.
 
+## Architecture
+
+![Architecture](docs/assets/architecture.svg)
+
+---
+
+## Sample Output
+
+![Sample Output](docs/assets/leakage_report_sample.svg)
+
+---
+
 ## About
 
 The worst feature leakage is invisible. A model trained on a post-outcome column doesn't look miscalibrated — it looks exceptional. AUC near 1.0, precision through the roof, validation loss flatlining early. Nothing in the training curves signals the problem. The failure only surfaces when the model hits production and the feature isn't available yet, because it was generated after the event you were trying to predict.
@@ -138,3 +150,17 @@ FeatureLeakageLens is the **pre-training data quality gate** for ML platforms in
 - **RiskFrame:** Before training the XGBoost champion on Home Credit data, FeatureLeakageLens audits the feature set for target leakage (features that encode default status directly, like post-default payment flags), temporal leakage (features computed after the loan decision date), and near-duplicate features. The `credit_income_ratio` engineered feature passes all checks; it is a pre-decision ratio, not a post-outcome signal.
 - **DevPulse:** The training data for DevPulse's version classification model is audited by FeatureLeakageLens to ensure version labels don't appear in the feature text (label contamination in the NLP context).
 - **Any tabular ML pipeline:** The library is general-purpose. Any project that trains a supervised model on tabular data should run FeatureLeakageLens before fitting to avoid shipping a model with an inflated AUC that collapses in production.
+
+---
+
+## Part of Applied LLM Systems Portfolio
+
+This project is part of a portfolio targeting Applied LLM Systems Engineer roles.
+
+- [**NexusSupply**](https://github.com/SidharthKriplani/nexussupply) — Supplier Risk Intelligence Platform (LangGraph + FinBERT + XGBoost + Instructor + NetworkX)
+- [**LendFlow**](https://github.com/SidharthKriplani/lendflow) — AI-powered loan underwriting pipeline (LangGraph + RAG + FOIR rules engine)
+- [**AgentReliabilityLab**](https://github.com/SidharthKriplani/agentreliabilitylab) — Cyber threat triage agent (LangGraph + hybrid RAG + HITL + RAGAS eval)
+- [**RiskFrame Platform**](https://github.com/SidharthKriplani/riskframe_platform) — ML model lifecycle (XGBoost + LightGBM champion/challenger, Optuna HPO, drift monitoring)
+- [**DevPulse Platform**](https://github.com/SidharthKriplani/devpulse_platform) — Version-safe RAG migration intelligence (LLM-Last principle, conflict detection)
+- [**PulseRank Platform**](https://github.com/SidharthKriplani/pulserank_platform) — Marketplace ranking with IPS debiasing (position bias correction, delayed attribution)
+- [**MetaSignal Platform**](https://github.com/SidharthKriplani/metasignal_platform) — Experimentation intelligence (CUPED + guardrail-first + A/A calibration)
