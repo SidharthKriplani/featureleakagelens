@@ -137,6 +137,10 @@ Built **FeatureLeakageLens**, a pre-training feature leakage auditor for tabular
 - Group leakage check for cross-validation folds (same entity in train and test)
 - Time-series walk-forward split validator
 
+## Interview Defense
+
+[📄 FeatureLeakageLens_Interview_Defense_v2.pdf](docs/defense/FeatureLeakageLens_Interview_Defense_v2.pdf) — covers target leakage detection methodology, temporal leakage window logic, near-duplicate feature correlation thresholds, label contamination in NLP pipelines, and production failure modes.
+
 ## License
 
 MIT
